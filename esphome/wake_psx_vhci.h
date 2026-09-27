@@ -130,8 +130,12 @@ static uint8_t hex_nibble(char c) {
   return static_cast<uint8_t>(c - 'A' + 10);
 }
 
-static bool parse_mac_string(const std::string &mac, uint8_t out[6]) {
+// `label` identifies the field in log output (e.g. "dsx_mac", "psx_mac") so a
+// rejection can be traced back to which of the two addresses failed, and why.
+static bool parse_mac_string(const std::string &mac, uint8_t out[6], const char *label) {
   if (mac.size() != 17) {
+    ESP_LOGW(TAG, "%s='%s' rejected: expected 17 characters (XX:XX:XX:XX:XX:XX), got %zu",
+              label, mac.c_str(), mac.size());
     return false;
   }
 
@@ -141,9 +145,12 @@ static bool parse_mac_string(const std::string &mac, uint8_t out[6]) {
     const unsigned char lo = static_cast<unsigned char>(mac[pos + 1]);
 
     if (!std::isxdigit(hi) || !std::isxdigit(lo)) {
+      ESP_LOGW(TAG, "%s='%s' rejected: non-hex character at position %zu", label, mac.c_str(), pos);
       return false;
     }
     if (i < 5 && mac[pos + 2] != ':') {
+      ESP_LOGW(TAG, "%s='%s' rejected: expected ':' at position %zu, got '%c'",
+                label, mac.c_str(), pos + 2, mac[pos + 2]);
       return false;
     }
 
@@ -163,7 +170,19 @@ static bool parse_mac_string(const std::string &mac, uint8_t out[6]) {
   const bool is_broadcast = (out[0] & out[1] & out[2] & out[3] & out[4] & out[5]) == 0xFF;
   const bool is_multicast = (out[0] & 0x01) != 0;  // IEEE 802 Group bit
 
-  if (is_all_zeros || is_broadcast || is_multicast) {
+  if (is_all_zeros) {
+    ESP_LOGW(TAG, "%s='%s' rejected: all-zeros address", label, mac.c_str());
+    return false;
+  }
+  if (is_broadcast) {
+    ESP_LOGW(TAG, "%s='%s' rejected: broadcast address (FF:FF:FF:FF:FF:FF)", label, mac.c_str());
+    return false;
+  }
+  if (is_multicast) {
+    ESP_LOGW(TAG,
+              "%s='%s' rejected: multicast/group bit set on first byte (0x%02X) — not a valid "
+              "unicast BT Classic address",
+              label, mac.c_str(), out[0]);
     return false;
   }
 
@@ -213,10 +232,12 @@ static void wake_task(void *pvParameters) {
   uint8_t dsx_raw[6];
   uint8_t psx_raw[6];
 
-  // Parse MAC address strings into raw hex byte arrays.
-  if (!parse_mac_string(params->dsx_mac_, dsx_raw) || !parse_mac_string(params->psx_mac_, psx_raw)) {
-    ESP_LOGW(TAG, "Invalid MAC address format. dsx_mac=%s psx_mac=%s", params->dsx_mac_.c_str(),
-             params->psx_mac_.c_str());
+  // Parse MAC address strings into raw hex byte arrays. Both are always checked
+  // (no short-circuit) so a failure on one field doesn't hide a second failure
+  // on the other; parse_mac_string logs the specific reason for each rejection.
+  const bool dsx_ok = parse_mac_string(params->dsx_mac_, dsx_raw, "dsx_mac");
+  const bool psx_ok = parse_mac_string(params->psx_mac_, psx_raw, "psx_mac");
+  if (!dsx_ok || !psx_ok) {
     finish_task("Invalid MAC", true);
     return;
   }

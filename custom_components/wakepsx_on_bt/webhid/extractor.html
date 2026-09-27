@@ -202,6 +202,13 @@
   // Byte offsets are relative to the WebHID feature-report payload, which does
   // NOT include the leading report-ID byte (the browser strips it) — unlike a
   // raw USB control transfer, whose returned buffer keeps the report ID at [0].
+  //
+  // EXPERIMENTAL: the DS4/DualSense entries below read without reversing the
+  // byte order, unlike the upstream pyusb library's `msg[1:7][::-1]`. Both
+  // pull the same 6 bytes at the same offsets either way — only the byte
+  // order within each address changes. If the extracted MACs are rejected as
+  // invalid (e.g. the multicast/group bit set on the first byte) with this
+  // setting, flip `reversed` back to `true` here to match the pyusb behavior.
   const CONTROLLERS = {
     0x0268: {
       type: "dualshock3",
@@ -215,32 +222,32 @@
       type: "dualshock4",
       label: "DualShock 4 (v1)",
       reports: [
-        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: true },
-        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: true },
+        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: false },
+        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: false },
       ],
     },
     0x09cc: {
       type: "dualshock4",
       label: "DualShock 4 (v2)",
       reports: [
-        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: true },
-        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: true },
+        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: false },
+        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: false },
       ],
     },
     0x0ce6: {
       type: "dualsense",
       label: "DualSense",
       reports: [
-        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: true },
-        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: true },
+        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: false },
+        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: false },
       ],
     },
     0x0df2: {
       type: "dualsense_edge",
       label: "DualSense Edge",
       reports: [
-        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: true },
-        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: true },
+        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: false },
+        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: false },
       ],
     },
   };
