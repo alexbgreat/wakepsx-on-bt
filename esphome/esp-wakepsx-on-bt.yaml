@@ -42,6 +42,12 @@ esp32:
       CONFIG_BT_NIMBLE_ENABLED: "n"
       CONFIG_BT_HCI_MODE_VHCI: "y"
       CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY: "y"
+    advanced:
+      # ESPHome 2026.9+: the "bt" IDF component is excluded by default. wake_psx_vhci.h
+      # includes esp_bt.h directly (not via a registered external component), so it must
+      # be opted back in here rather than through esp32.include_builtin_idf_component().
+      include_builtin_idf_components:
+        - bt
 
 # This sensor acts as the dynamic feedback link for Home Assistant's UI
 text_sensor:
