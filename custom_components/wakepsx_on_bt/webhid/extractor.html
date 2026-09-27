@@ -166,9 +166,15 @@
   </div>
 
   <div class="card" id="result-card">
+    <!-- Field order matches the Home Assistant "Enter manually" step
+         (psx_mac, dsx_mac, controller_type) exactly, so copying top-to-bottom
+         lands each value in the right field instead of transposing them. -->
     <div class="field">
-      <label for="controller-type">Controller Type</label>
-      <input id="controller-type" readonly />
+      <label for="psx-mac">Console MAC (psx_mac)</label>
+      <div class="row">
+        <input id="psx-mac" readonly />
+        <button class="copy-btn secondary" data-copy="psx-mac">Copy</button>
+      </div>
     </div>
     <div class="field">
       <label for="dsx-mac">Controller MAC (dsx_mac)</label>
@@ -178,11 +184,8 @@
       </div>
     </div>
     <div class="field">
-      <label for="psx-mac">Console MAC (psx_mac)</label>
-      <div class="row">
-        <input id="psx-mac" readonly />
-        <button class="copy-btn secondary" data-copy="psx-mac">Copy</button>
-      </div>
+      <label for="controller-type">Controller Type</label>
+      <input id="controller-type" readonly />
     </div>
   </div>
 
