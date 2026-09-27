@@ -3,8 +3,19 @@
     "step": {
       "user": {
         "title": "Wake PSX on Bluetooth - Step 1",
-        "description": "Please connect your PlayStation controller (DualShock/DualSense) to the Home Assistant server via USB, then click Submit to extract the MAC addresses.\n\n{status}",
-        "data": {}
+        "description": "Please connect your PlayStation controller (DualShock/DualSense) to the Home Assistant server via USB, then click Submit to extract the MAC addresses.\n\nNo USB access on this server, or the controller only reaches your computer/phone? Open the [browser-based WebHID tool]({webhid_url}) instead, then tick \"Enter manually\" below.\n\n{status}",
+        "data": {
+          "manual_entry": "Enter manually (use the WebHID tool)"
+        }
+      },
+      "manual_entry": {
+        "title": "Wake PSX on Bluetooth - Step 1 (Manual Entry)",
+        "description": "Open the [browser-based WebHID tool]({webhid_url}), connect your controller there, then copy the two MAC addresses it shows into the fields below.",
+        "data": {
+          "psx_mac": "Console MAC (psx_mac)",
+          "dsx_mac": "Controller MAC (dsx_mac)",
+          "controller_type": "Controller Type"
+        }
       },
       "select_controller": {
         "title": "Wake PSX on Bluetooth — Controller Selection",
@@ -60,6 +71,7 @@
     "error": {
       "no_controller": "No compatible PlayStation controller found on USB. Please reconnect and try again.",
       "extraction_error": "An error occurred while reading the USB device. Check your system logs.",
+      "invalid_mac": "One of the MAC addresses is not valid. Expected format: XX:XX:XX:XX:XX:XX.",
       "invalid_wake_method": "Invalid wake method selected.",
       "invalid_adapter": "Invalid Bluetooth adapter format. Use hciX (example: hci0).",
       "adapter_already_configured": "The selected Bluetooth adapter is already configured for another console.",

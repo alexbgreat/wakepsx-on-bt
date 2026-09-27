@@ -2,5 +2,5 @@
   "name": "Wake PSX on Bluetooth",
   "render_readme": true,
   "zip_release": false,
-  "homeassistant": "2024.1.0"
+  "homeassistant": "2024.7.0"
 }

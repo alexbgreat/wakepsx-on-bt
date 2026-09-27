@@ -18,8 +18,9 @@ The integration impersonates your paired DualShock/DualSense controller using a 
 ### Both methods
 
 - A **paired DualShock 3**, **DualShock 4**, or **DualSense** controller
-- A **USB data cable** to connect the controller to your HA host during setup (one-time only)
-- Home Assistant OS, Supervised, or Container with USB passthrough enabled
+- Either:
+  - A **USB data cable** to connect the controller to your HA host during setup (one-time only), with USB passthrough enabled (Home Assistant OS, Supervised, or Container); **or**
+  - A Chromium-based browser (Chrome, Edge) on the device you're using to complete setup, to read the MAC addresses via **WebHID** instead — see [WebHID extraction](#webhid-extraction-no-usb-passthrough-needed) below
 
 ### ESPHome method
 
@@ -72,13 +73,31 @@ The Dongle method sends the wake packet by temporarily spoofing the Bluetooth ad
 1. Plug your paired PlayStation controller into the USB port of your HA host. *(Controller must be off before plugging in.)*
 2. Go to **Settings → Devices & Services → Add Integration**.
 3. Search for **Wake PSX on Bluetooth**.
-4. **Step 1:** The integration reads the MAC addresses from the USB controller automatically.
+4. **Step 1:** The integration reads the MAC addresses from the USB controller automatically. No USB access on the HA host? Tick **Enter manually** instead and use the [WebHID tool](#webhid-extraction-no-usb-passthrough-needed).
 5. **Step 2:** Choose your wake method and console name.
 6. **Step 3 (ESPHome):** Select your ESPHome node from the list.
    **Step 3 (Dongle):** Select your Bluetooth adapter from the list.
 7. Unplug the controller. Done.
 
 A **Button** entity is created for the console. The entity ID is derived from the console name — for example, `button.my_ps5_wake` for a console named "My PS5". Find the exact ID in **Developer Tools → States**.
+
+---
+
+## WebHID extraction (no USB passthrough needed)
+
+If your Home Assistant host doesn't have (or can't be given) USB access to the controller — a Docker host with no `--device` passthrough, a locked-down NAS, HA Cloud, etc. — Step 1 also offers a browser-based alternative that reads the two MAC addresses directly in your own browser, using the [WebHID API](https://wicg.github.io/webhid/), instead of on the HA server.
+
+1. On Step 1 of the setup wizard, open the linked WebHID tool (served by HA itself at `/api/wakepsx_on_bt/webhid/extractor.html`).
+2. Plug the controller into **the computer or phone you're using right now**, not the HA host.
+3. Click **Connect Controller** and pick it from the browser's device picker.
+4. Copy the two MAC addresses it displays.
+5. Back in the setup wizard, tick **Enter manually**, submit, then paste the MAC addresses and pick the controller type.
+
+Requirements and limitations:
+
+- **Browser support:** Chrome, Edge, or another Chromium-based browser. WebHID is not implemented in Firefox or Safari.
+- **Secure context:** the page must be loaded over HTTPS (e.g. via Nabu Casa or a reverse proxy with a certificate) — plain `http://homeassistant.local:8123` will not expose `navigator.hid`. As a workaround, the extractor page has no server dependency once downloaded, so it can also be saved locally and opened directly as a `file://` URL, which browsers also treat as a secure context.
+- This only replaces the one-time MAC address extraction in Step 1. The **Bluetooth Dongle** wake method still requires raw HCI (`CAP_NET_RAW`/`CAP_NET_ADMIN`) access on the HA host itself — WebHID cannot substitute for that.
 
 ---
 
@@ -168,7 +187,8 @@ styles:
 
 ### Both methods
 
-- **USB Extraction Failed / No Controller Found:** Use a data cable (not charge-only). Check that your HA host OS allows USB device access (udev rules on custom Linux hosts).
+- **USB Extraction Failed / No Controller Found:** Use a data cable (not charge-only). Check that your HA host OS allows USB device access (udev rules on custom Linux hosts). Alternatively, use the [WebHID tool](#webhid-extraction-no-usb-passthrough-needed) and tick **Enter manually** — this avoids USB passthrough on the HA host entirely.
+- **WebHID tool shows "not available in this browser":** Use Chrome or Edge, and make sure the page is loaded over HTTPS or opened as a local `file://` page — WebHID requires a secure context and isn't implemented in Firefox/Safari.
 
 ---
 

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wake PSX on Bluetooth — WebHID MAC Extractor</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b7280;
+    --accent: #0a84ff;
+    --accent-text: #ffffff;
+    --border: #e2e4e8;
+    --ok: #1f9d55;
+    --err: #d64545;
+    --mono-bg: #eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --card: #232427;
+      --text: #f2f2f3;
+      --muted: #9a9ba1;
+      --accent: #3ea0ff;
+      --accent-text: #0b1220;
+      --border: #35363a;
+      --ok: #35c46a;
+      --err: #ff6b6b;
+      --mono-bg: #1b1c1f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  main {
+    width: 100%;
+    max-width: 560px;
+  }
+  h1 {
+    font-size: 1.3rem;
+    margin: 0 0 4px;
+  }
+  p.subtitle {
+    color: var(--muted);
+    margin: 0 0 20px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 18px;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-text);
+    width: 100%;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+  }
+  .field .row {
+    display: flex;
+    gap: 8px;
+  }
+  .field input {
+    flex: 1;
+    font: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--mono-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+  }
+  .copy-btn {
+    width: auto;
+    padding: 10px 14px;
+    flex: 0 0 auto;
+  }
+  #status {
+    font-size: 0.88rem;
+    margin-top: 12px;
+    min-height: 1.2em;
+    line-height: 1.4;
+  }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+  #status.muted { color: var(--muted); }
+  #result-card { display: none; }
+  code {
+    background: var(--mono-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .steps {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Wake PSX on Bluetooth</h1>
+  <p class="subtitle">
+    Read the paired console and controller MAC addresses straight from your
+    DualShock/DualSense controller over <strong>WebHID</strong> — no need to
+    plug it into the Home Assistant server itself.
+  </p>
+
+  <div class="card">
+    <ol class="steps">
+      <li>Plug the controller into <em>this device</em> (the computer/phone running the browser) via USB.</li>
+      <li>Click "Connect Controller" below and pick it from the browser's device picker.</li>
+      <li>Copy the two MAC addresses into the "Enter manually" step of the Home Assistant setup wizard.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <button id="connect-btn">Connect Controller</button>
+    <div id="status" class="muted">Requires Chrome, Edge, or another Chromium-based browser, over HTTPS (or a local file).</div>
+  </div>
+
+  <div class="card" id="result-card">
+    <div class="field">
+      <label for="controller-type">Controller Type</label>
+      <input id="controller-type" readonly />
+    </div>
+    <div class="field">
+      <label for="dsx-mac">Controller MAC (dsx_mac)</label>
+      <div class="row">
+        <input id="dsx-mac" readonly />
+        <button class="copy-btn secondary" data-copy="dsx-mac">Copy</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="psx-mac">Console MAC (psx_mac)</label>
+      <div class="row">
+        <input id="psx-mac" readonly />
+        <button class="copy-btn secondary" data-copy="psx-mac">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Wake PSX on Bluetooth &middot; runs entirely in your browser, nothing is sent anywhere.</footer>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const VENDOR_SONY = 0x054c;
+
+  // productId -> { type, label, reports: [{ reportId, dsxSlice, psxSlice, reversed }] }
+  // Byte offsets are relative to the WebHID feature-report payload, which does
+  // NOT include the leading report-ID byte (the browser strips it) — unlike a
+  // raw USB control transfer, whose returned buffer keeps the report ID at [0].
+  const CONTROLLERS = {
+    0x0268: {
+      type: "dualshock3",
+      label: "DualShock 3",
+      reports: [
+        { reportId: 0xf2, field: "dsx", slice: [3, 9] },
+        { reportId: 0xf5, field: "psx", slice: [1, 7] },
+      ],
+    },
+    0x05c4: {
+      type: "dualshock4",
+      label: "DualShock 4 (v1)",
+      reports: [
+        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: true },
+        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: true },
+      ],
+    },
+    0x09cc: {
+      type: "dualshock4",
+      label: "DualShock 4 (v2)",
+      reports: [
+        { reportId: 0x12, field: "dsx", slice: [0, 6], reversed: true },
+        { reportId: 0x12, field: "psx", slice: [9, 15], reversed: true },
+      ],
+    },
+    0x0ce6: {
+      type: "dualsense",
+      label: "DualSense",
+      reports: [
+        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: true },
+        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: true },
+      ],
+    },
+    0x0df2: {
+      type: "dualsense_edge",
+      label: "DualSense Edge",
+      reports: [
+        { reportId: 0x09, field: "dsx", slice: [0, 6], reversed: true },
+        { reportId: 0x09, field: "psx", slice: [9, 15], reversed: true },
+      ],
+    },
+  };
+
+  const connectBtn = document.getElementById("connect-btn");
+  const statusEl = document.getElementById("status");
+  const resultCard = document.getElementById("result-card");
+  const controllerTypeEl = document.getElementById("controller-type");
+  const dsxMacEl = document.getElementById("dsx-mac");
+  const psxMacEl = document.getElementById("psx-mac");
+
+  function setStatus(message, kind) {
+    statusEl.textContent = message;
+    statusEl.className = kind || "muted";
+  }
+
+  function formatMac(bytes) {
+    return Array.from(bytes)
+      .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+      .join(":");
+  }
+
+  function readSlice(view, [start, end], reversed) {
+    const bytes = [];
+    for (let i = start; i < end; i++) bytes.push(view.getUint8(i));
+    if (reversed) bytes.reverse();
+    return bytes;
+  }
+
+  async function extractFromDevice(device) {
+    const meta = CONTROLLERS[device.productId];
+    if (!meta) {
+      throw new Error(
+        `Unrecognised product ID 0x${device.productId.toString(16)}.`
+      );
+    }
+
+    if (!device.opened) {
+      await device.open();
+    }
+
+    const macs = {};
+    // Cache one read per distinct reportId (DS3 needs two different reports).
+    const reportCache = new Map();
+    for (const spec of meta.reports) {
+      if (!reportCache.has(spec.reportId)) {
+        const view = await device.receiveFeatureReport(spec.reportId);
+        reportCache.set(spec.reportId, view);
+      }
+      const view = reportCache.get(spec.reportId);
+      const bytes = readSlice(view, spec.slice, spec.reversed);
+      macs[spec.field] = formatMac(bytes);
+    }
+
+    return {
+      type: meta.type,
+      label: meta.label,
+      dsxMac: macs.dsx,
+      psxMac: macs.psx,
+    };
+  }
+
+  connectBtn.addEventListener("click", async () => {
+    if (!("hid" in navigator)) {
+      setStatus(
+        "WebHID is not available in this browser. Use Chrome or Edge, and make sure this page is loaded over HTTPS (or opened as a local file).",
+        "err"
+      );
+      return;
+    }
+
+    connectBtn.disabled = true;
+    resultCard.style.display = "none";
+    setStatus("Waiting for device selection…");
+
+    try {
+      const filters = Object.keys(CONTROLLERS).map((pid) => ({
+        vendorId: VENDOR_SONY,
+        productId: Number(pid),
+      }));
+      const devices = await navigator.hid.requestDevice({ filters });
+      if (!devices.length) {
+        setStatus("No device selected.", "muted");
+        return;
+      }
+
+      setStatus("Reading MAC addresses…");
+      const result = await extractFromDevice(devices[0]);
+
+      controllerTypeEl.value = result.label;
+      dsxMacEl.value = result.dsxMac;
+      psxMacEl.value = result.psxMac;
+      resultCard.style.display = "block";
+      setStatus("Done. Copy both MAC addresses into the setup wizard.", "ok");
+    } catch (err) {
+      console.error(err);
+      setStatus(`Failed to read the controller: ${err.message || err}`, "err");
+    } finally {
+      connectBtn.disabled = false;
+    }
+  });
+
+  document.querySelectorAll(".copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const input = document.getElementById(btn.dataset.copy);
+      if (!input.value) return;
+      try {
+        await navigator.clipboard.writeText(input.value);
+        const original = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => (btn.textContent = original), 1200);
+      } catch {
+        input.select();
+        document.execCommand("copy");
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

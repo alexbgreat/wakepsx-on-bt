@@ -16,6 +16,7 @@ CONF_CONTROLLER_TYPE: str = "controller_type"
 CONF_DSX_MAC: str = "dsx_mac"
 CONF_ESP_ENTITY: str = "wakepsx_on_bt_entity"
 CONF_PSX_MAC: str = "psx_mac"
+CONF_MANUAL_ENTRY: str = "manual_entry"
 CONF_WAKE_METHOD: str = "wake_method"
 CONF_BT_ADAPTER: str = "bt_adapter"
 

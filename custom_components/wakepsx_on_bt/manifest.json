@@ -2,7 +2,7 @@
   "domain": "wakepsx_on_bt",
   "name": "Wake PSX on Bluetooth",
   "codeowners": ["@FreeTHX"],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "documentation": "https://github.com/FreeTHX/wakepsx-on-bt",
   "issue_tracker": "https://github.com/FreeTHX/wakepsx-on-bt/issues",
   "after_dependencies": ["esphome"],

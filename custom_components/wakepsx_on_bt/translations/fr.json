@@ -3,8 +3,19 @@
     "step": {
       "user": {
         "title": "Wake PSX on Bluetooth - Étape 1",
-        "description": "Veuillez connecter votre manette PlayStation (DualShock/DualSense) au serveur Home Assistant via USB, puis cliquez sur Valider pour extraire les adresses MAC.\n\n{status}",
-        "data": {}
+        "description": "Veuillez connecter votre manette PlayStation (DualShock/DualSense) au serveur Home Assistant via USB, puis cliquez sur Valider pour extraire les adresses MAC.\n\nPas d'accès USB sur ce serveur, ou la manette n'est accessible que depuis votre ordinateur/téléphone ? Ouvrez plutôt l'[outil WebHID dans le navigateur]({webhid_url}), puis cochez « Saisie manuelle » ci-dessous.\n\n{status}",
+        "data": {
+          "manual_entry": "Saisie manuelle (via l'outil WebHID)"
+        }
+      },
+      "manual_entry": {
+        "title": "Wake PSX on Bluetooth - Étape 1 (Saisie manuelle)",
+        "description": "Ouvrez l'[outil WebHID dans le navigateur]({webhid_url}), connectez-y votre manette, puis recopiez les deux adresses MAC affichées dans les champs ci-dessous.",
+        "data": {
+          "psx_mac": "Adresse MAC de la console (psx_mac)",
+          "dsx_mac": "Adresse MAC de la manette (dsx_mac)",
+          "controller_type": "Type de manette"
+        }
       },
       "select_controller": {
         "title": "Wake PSX on Bluetooth — Sélection de la manette",
@@ -60,6 +71,7 @@
     "error": {
       "no_controller": "Aucune manette PlayStation compatible détectée en USB. Veuillez la rebrancher et réessayer.",
       "extraction_error": "Une erreur s'est produite lors de la lecture du périphérique USB. Consultez les journaux (logs).",
+      "invalid_mac": "Une des adresses MAC est invalide. Format attendu : XX:XX:XX:XX:XX:XX.",
       "invalid_wake_method": "Méthode de réveil invalide.",
       "invalid_adapter": "Format d'adaptateur Bluetooth invalide. Utilisez hciX (exemple : hci0).",
       "adapter_already_configured": "L'adaptateur Bluetooth sélectionné est déjà configuré pour une autre console.",

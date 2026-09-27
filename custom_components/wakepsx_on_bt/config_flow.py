@@ -15,6 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 
+from . import WEBHID_URL_PATH, async_register_webhid_static_path
 from .const import (
     CONF_BT_ADAPTER,
     CONF_BT_STRATEGY,
@@ -24,6 +25,7 @@ from .const import (
     CONF_DSX_MAC,
     CONF_ESP_ENTITY,
     CONF_ESP_SERVICE,
+    CONF_MANUAL_ENTRY,
     CONF_PSX_MAC,
     CONF_WAKE_METHOD,
     CONSOLE_NAME_PS3,
@@ -52,6 +54,8 @@ from pywakepsx_on_bt.const import (
     KEY_DSX_MAC,
     KEY_PSX_MAC,
 )
+from pywakepsx_on_bt.exceptions import InvalidMacAddressError
+from pywakepsx_on_bt.mac import normalize_mac
 from pywakepsx_on_bt.strategies import detect_strategy, list_compatible_adapters
 from pywakepsx_on_bt.strategies.csr import CsrSpoofStrategy
 from pywakepsx_on_bt.usb import extract_psx_bt_macs
@@ -275,13 +279,51 @@ class PSXWakeBTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._step2_esp_entities: dict[str, str] = {}
         self._step2_adapter_names: list[str] = []
 
+    async def _assign_controller(
+        self, psx_mac: str, dsx_mac: str, controller_type: str
+    ) -> None:
+        """Store the chosen controller's identifiers and resolve reconfigure state.
+
+        If a config entry already exists for this console's MAC, flags it for
+        reconfiguration instead of creating a duplicate. Otherwise claims the
+        unique_id, aborting the flow if another in-progress flow beat us to it.
+        """
+        self._psx_mac = psx_mac
+        self._dsx_mac = dsx_mac
+        self._controller_type = controller_type
+        self._console_name = CONTROLLER_TO_CONSOLE.get(
+            controller_type, DEFAULT_CONSOLE_NAME
+        )
+        existing = next(
+            (
+                e
+                for e in self.hass.config_entries.async_entries(DOMAIN)
+                if e.unique_id == psx_mac.lower()
+            ),
+            None,
+        )
+        if existing is not None:
+            self._reconfigure_entry = existing
+            self._console_name = existing.data.get(
+                CONF_CONSOLE_NAME, self._console_name
+            )
+        else:
+            await self.async_set_unique_id(psx_mac.lower())
+            self._abort_if_unique_id_configured()
+
     async def async_step_user(
         self, user_input: Mapping[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Step 1: Extract MAC addresses from the USB-connected controller."""
         errors: dict[str, str] = {}
 
+        # The WebHID tool is only ever needed once a user reaches this step,
+        # so register its static path lazily rather than at HA startup.
+        await async_register_webhid_static_path(self.hass)
+
         if user_input is not None:
+            if user_input.get(CONF_MANUAL_ENTRY):
+                return await self.async_step_manual_entry()
             try:
                 controllers = await self.hass.async_add_executor_job(
                     extract_psx_bt_macs
@@ -291,30 +333,11 @@ class PSXWakeBTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "no_controller"
                 elif len(controllers) == 1:
                     ctrl = controllers[0]
-                    self._psx_mac = ctrl[KEY_PSX_MAC]
-                    self._dsx_mac = ctrl[KEY_DSX_MAC]
-                    self._controller_type = ctrl.get(
-                        KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME
+                    await self._assign_controller(
+                        ctrl[KEY_PSX_MAC],
+                        ctrl[KEY_DSX_MAC],
+                        ctrl.get(KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME),
                     )
-                    self._console_name = CONTROLLER_TO_CONSOLE.get(
-                        self._controller_type, DEFAULT_CONSOLE_NAME
-                    )
-                    existing = next(
-                        (
-                            e
-                            for e in self.hass.config_entries.async_entries(DOMAIN)
-                            if e.unique_id == self._psx_mac.lower()
-                        ),
-                        None,
-                    )
-                    if existing is not None:
-                        self._reconfigure_entry = existing
-                        self._console_name = existing.data.get(
-                            CONF_CONSOLE_NAME, self._console_name
-                        )
-                    else:
-                        await self.async_set_unique_id(self._psx_mac.lower())
-                        self._abort_if_unique_id_configured()
                     return await self.async_step_select_wake_method()
                 else:
                     self._detected_controllers = controllers
@@ -330,11 +353,59 @@ class PSXWakeBTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "extraction_error": "⚠ Failed to read the USB device. Check system logs.",
         }.get(errors.get("base", ""), "")
 
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_MANUAL_ENTRY, default=False): bool,
+            }
+        )
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({}),
+            data_schema=schema,
             errors=errors,
-            description_placeholders={"status": status},
+            description_placeholders={
+                "status": status,
+                "webhid_url": WEBHID_URL_PATH + "/extractor.html",
+            },
+        )
+
+    async def async_step_manual_entry(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Step 1 (alternate): Accept MAC addresses read via the WebHID tool.
+
+        Lets the user paste the ``dsx_mac``/``psx_mac`` pair extracted in their
+        own browser (see the WebHID extractor page linked from step 1) instead
+        of plugging the controller into the Home Assistant host over USB.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                psx_mac = normalize_mac(user_input.get(CONF_PSX_MAC, ""))
+                dsx_mac = normalize_mac(user_input.get(CONF_DSX_MAC, ""))
+            except InvalidMacAddressError:
+                errors["base"] = "invalid_mac"
+            else:
+                controller_type = user_input.get(
+                    CONF_CONTROLLER_TYPE, DEFAULT_CONTROLLER_NAME
+                )
+                await self._assign_controller(psx_mac, dsx_mac, controller_type)
+                return await self.async_step_select_wake_method()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_PSX_MAC): str,
+                vol.Required(CONF_DSX_MAC): str,
+                vol.Required(CONF_CONTROLLER_TYPE): vol.In(_CONTROLLER_DISPLAY_NAME),
+            }
+        )
+        return self.async_show_form(
+            step_id="manual_entry",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "webhid_url": WEBHID_URL_PATH + "/extractor.html",
+            },
         )
 
     async def async_step_select_controller(
@@ -359,24 +430,11 @@ class PSXWakeBTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             if ctrl is None:
                 return self.async_abort(reason="extraction_error")
-            self._psx_mac = ctrl[KEY_PSX_MAC]
-            self._dsx_mac = ctrl[KEY_DSX_MAC]
-            self._controller_type = ctrl.get(KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME)
-            self._console_name = CONTROLLER_TO_CONSOLE.get(
-                self._controller_type, DEFAULT_CONSOLE_NAME
+            await self._assign_controller(
+                ctrl[KEY_PSX_MAC],
+                ctrl[KEY_DSX_MAC],
+                ctrl.get(KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME),
             )
-            if self._psx_mac.lower() in configured_macs:
-                self._reconfigure_entry = next(
-                    e
-                    for e in self.hass.config_entries.async_entries(DOMAIN)
-                    if e.unique_id == self._psx_mac.lower()
-                )
-                self._console_name = self._reconfigure_entry.data.get(
-                    CONF_CONSOLE_NAME, self._console_name
-                )
-            else:
-                await self.async_set_unique_id(self._psx_mac.lower())
-                self._abort_if_unique_id_configured()
             return await self.async_step_select_wake_method()
 
         options = _build_controller_options(self._detected_controllers, configured_macs)
