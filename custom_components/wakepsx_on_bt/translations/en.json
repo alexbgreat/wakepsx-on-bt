@@ -97,10 +97,40 @@
   "options": {
     "step": {
       "init": {
+        "title": "Reconfigure Wake PSX on Bluetooth",
+        "menu_options": {
+          "init_wake_method": "Wake Method",
+          "init_macs": "MAC Addresses (new controller)"
+        }
+      },
+      "init_wake_method": {
         "title": "Reconfigure Wake Method",
         "description": "Detected: **ESPHome** — {esp_summary} | **Bluetooth** — {adapter_summary}\n\nSelect which wake method should be used for this console.",
         "data": {
           "wake_method": "Wake Method"
+        }
+      },
+      "init_macs": {
+        "title": "Update MAC Addresses",
+        "description": "Plug in the replacement controller to the Home Assistant server via USB, then click Submit to re-extract the MAC addresses automatically.\n\nNo USB access on this server, or the controller only reaches your computer/phone? Open the [browser-based WebHID tool]({webhid_url}) instead, then tick \"Enter manually\" below.",
+        "data": {
+          "manual_entry": "Enter manually (use the WebHID tool)"
+        }
+      },
+      "init_macs_select": {
+        "title": "Wake PSX on Bluetooth — Controller Selection",
+        "description": "**{count} PlayStation controllers detected.** Select the one you want to use for this console.",
+        "data": {
+          "selected_controller": "Controller"
+        }
+      },
+      "init_macs_manual": {
+        "title": "Update MAC Addresses (Manual Entry)",
+        "description": "Open the [browser-based WebHID tool]({webhid_url}), connect your controller there, then copy the two MAC addresses it shows into the fields below.",
+        "data": {
+          "psx_mac": "Console MAC (psx_mac)",
+          "dsx_mac": "Controller MAC (dsx_mac)",
+          "controller_type": "Controller Type"
         }
       },
       "init_esphome": {
@@ -138,6 +168,22 @@
           "csr_write_mode": "CSR Write Mode"
         }
       }
+    },
+    "error": {
+      "no_controller": "No compatible PlayStation controller found on USB. Please reconnect and try again.",
+      "extraction_error": "An error occurred while reading the USB device. Check your system logs.",
+      "invalid_mac": "One of the MAC addresses is not valid. Expected format: XX:XX:XX:XX:XX:XX.",
+      "invalid_wake_method": "Invalid wake method selected.",
+      "invalid_adapter": "Invalid Bluetooth adapter format. Use hciX (example: hci0).",
+      "adapter_already_configured": "The selected Bluetooth adapter is already configured for another console.",
+      "adapter_not_found": "The selected Bluetooth adapter was not detected on this system.",
+      "detection_error": "Failed to detect the adapter strategy. Check that the adapter is connected and that Home Assistant has access to Bluetooth devices.",
+      "no_esphome_found": "No compatible ESPHome node found. Make sure a node running the WakePSX firmware is online and reachable from Home Assistant.",
+      "no_adapter_found": "No Bluetooth adapter detected on this system. Please connect a USB Bluetooth dongle and try again."
+    },
+    "abort": {
+      "already_configured": "This MAC address is already used by another configured console.",
+      "extraction_error": "An internal error occurred while reading the controller. Please try again."
     }
   }
 }

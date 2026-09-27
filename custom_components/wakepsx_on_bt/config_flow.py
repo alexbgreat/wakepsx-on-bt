@@ -724,7 +724,7 @@ class PSXWakeBTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class PSXWakeBTOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow to reconfigure wake method and target."""
+    """Handle options flow to reconfigure wake method, target, and MAC addresses."""
 
     def __init__(self) -> None:
         self._pending_bt_adapter: str = ""
@@ -732,8 +732,176 @@ class PSXWakeBTOptionsFlowHandler(config_entries.OptionsFlow):
         # Cached from init pre-scan (used for submit validation)
         self._init_esp_entities: dict[str, str] = {}
         self._init_adapter_names: list[str] = []
+        # Cached between init_macs and init_macs_select (multi-controller case)
+        self._detected_controllers: list[dict[str, str]] = []
 
     async def async_step_init(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Choose what to reconfigure for this console."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["init_wake_method", "init_macs"],
+        )
+
+    def _apply_mac_update(
+        self, psx_mac: str, dsx_mac: str, controller_type: str
+    ) -> config_entries.FlowResult:
+        """Update this entry's MAC addresses in place.
+
+        Aborts if the new console MAC is already claimed by a *different*
+        config entry; otherwise updates the data (and unique_id, since it is
+        derived from the console MAC) without touching the wake method,
+        console name, or any other existing setting.
+        """
+        conflict = next(
+            (
+                e
+                for e in self.hass.config_entries.async_entries(DOMAIN)
+                if e.unique_id == psx_mac.lower()
+                and e.entry_id != self.config_entry.entry_id
+            ),
+            None,
+        )
+        if conflict is not None:
+            return self.async_abort(reason="already_configured")
+
+        new_data = dict(self.config_entry.data)
+        new_data[CONF_PSX_MAC] = psx_mac
+        new_data[CONF_DSX_MAC] = dsx_mac
+        new_data[CONF_CONTROLLER_TYPE] = controller_type
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, data=new_data, unique_id=psx_mac.lower()
+        )
+        return self.async_create_entry(title="", data={})
+
+    async def async_step_init_macs(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Re-extract MAC addresses (e.g. after pairing a replacement controller)."""
+        errors: dict[str, str] = {}
+
+        await async_register_webhid_static_path(self.hass)
+
+        if user_input is not None:
+            if user_input.get(CONF_MANUAL_ENTRY):
+                return await self.async_step_init_macs_manual()
+            try:
+                controllers = await self.hass.async_add_executor_job(
+                    extract_psx_bt_macs
+                )
+                if not controllers:
+                    _LOGGER.warning("No compatible PlayStation controller found on USB")
+                    errors["base"] = "no_controller"
+                elif len(controllers) == 1:
+                    ctrl = controllers[0]
+                    return self._apply_mac_update(
+                        ctrl[KEY_PSX_MAC],
+                        ctrl[KEY_DSX_MAC],
+                        ctrl.get(KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME),
+                    )
+                else:
+                    self._detected_controllers = controllers
+                    return await self.async_step_init_macs_select()
+            except Exception:
+                _LOGGER.exception("USB extraction failed")
+                errors["base"] = "extraction_error"
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_MANUAL_ENTRY, default=False): bool,
+            }
+        )
+        return self.async_show_form(
+            step_id="init_macs",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "webhid_url": WEBHID_URL_PATH + "/extractor.html",
+            },
+        )
+
+    async def async_step_init_macs_select(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Multi-controller case: select which one to apply to this entry."""
+        if user_input is not None:
+            selected_mac = user_input.get("selected_controller", "")
+            ctrl = next(
+                (
+                    c
+                    for c in self._detected_controllers
+                    if c.get(KEY_PSX_MAC) == selected_mac
+                ),
+                None,
+            )
+            if ctrl is None:
+                return self.async_abort(reason="extraction_error")
+            return self._apply_mac_update(
+                ctrl[KEY_PSX_MAC],
+                ctrl[KEY_DSX_MAC],
+                ctrl.get(KEY_CTRL_TYPE, DEFAULT_CONTROLLER_NAME),
+            )
+
+        options = _build_controller_options(self._detected_controllers)
+        schema = vol.Schema(
+            {
+                vol.Required("selected_controller"): vol.In(options),
+            }
+        )
+        return self.async_show_form(
+            step_id="init_macs_select",
+            data_schema=schema,
+            description_placeholders={"count": str(len(self._detected_controllers))},
+        )
+
+    async def async_step_init_macs_manual(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Accept MAC addresses read via the WebHID tool, instead of USB re-extraction."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                psx_mac = normalize_mac(user_input.get(CONF_PSX_MAC, ""))
+                dsx_mac = normalize_mac(user_input.get(CONF_DSX_MAC, ""))
+            except InvalidMacAddressError:
+                errors["base"] = "invalid_mac"
+            else:
+                controller_type = user_input.get(
+                    CONF_CONTROLLER_TYPE, DEFAULT_CONTROLLER_NAME
+                )
+                return self._apply_mac_update(psx_mac, dsx_mac, controller_type)
+
+        current_type = self.config_entry.data.get(
+            CONF_CONTROLLER_TYPE, DEFAULT_CONTROLLER_NAME
+        )
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_PSX_MAC, default=self.config_entry.data.get(CONF_PSX_MAC, "")
+                ): str,
+                vol.Required(
+                    CONF_DSX_MAC, default=self.config_entry.data.get(CONF_DSX_MAC, "")
+                ): str,
+                vol.Required(
+                    CONF_CONTROLLER_TYPE,
+                    default=current_type
+                    if current_type in _CONTROLLER_DISPLAY_NAME
+                    else vol.UNDEFINED,
+                ): vol.In(_CONTROLLER_DISPLAY_NAME),
+            }
+        )
+        return self.async_show_form(
+            step_id="init_macs_manual",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "webhid_url": WEBHID_URL_PATH + "/extractor.html",
+            },
+        )
+
+    async def async_step_init_wake_method(
         self, user_input: Mapping[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Choose wake method; blocks if the chosen method has no available device."""
@@ -790,7 +958,7 @@ class PSXWakeBTOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(
-            step_id="init",
+            step_id="init_wake_method",
             data_schema=schema,
             errors=errors,
             description_placeholders={

@@ -97,10 +97,40 @@
   "options": {
     "step": {
       "init": {
+        "title": "Reconfigurer Wake PSX on Bluetooth",
+        "menu_options": {
+          "init_wake_method": "Méthode de réveil",
+          "init_macs": "Adresses MAC (nouvelle manette)"
+        }
+      },
+      "init_wake_method": {
         "title": "Reconfigurer la méthode de réveil",
         "description": "Détecté : **ESPHome** — {esp_summary} | **Bluetooth** — {adapter_summary}\n\nSélectionnez la méthode de réveil à utiliser pour cette console.",
         "data": {
           "wake_method": "Méthode de réveil"
+        }
+      },
+      "init_macs": {
+        "title": "Mettre à jour les adresses MAC",
+        "description": "Connectez la manette de remplacement au serveur Home Assistant via USB, puis cliquez sur Valider pour extraire les adresses MAC automatiquement.\n\nPas d'accès USB sur ce serveur, ou la manette n'est accessible que depuis votre ordinateur/téléphone ? Ouvrez plutôt l'[outil WebHID dans le navigateur]({webhid_url}), puis cochez « Saisie manuelle » ci-dessous.",
+        "data": {
+          "manual_entry": "Saisie manuelle (via l'outil WebHID)"
+        }
+      },
+      "init_macs_select": {
+        "title": "Wake PSX on Bluetooth — Sélection de la manette",
+        "description": "**{count} manettes PlayStation détectées.** Sélectionnez celle que vous souhaitez utiliser pour cette console.",
+        "data": {
+          "selected_controller": "Manette"
+        }
+      },
+      "init_macs_manual": {
+        "title": "Mettre à jour les adresses MAC (Saisie manuelle)",
+        "description": "Ouvrez l'[outil WebHID dans le navigateur]({webhid_url}), connectez-y votre manette, puis recopiez les deux adresses MAC affichées dans les champs ci-dessous.",
+        "data": {
+          "psx_mac": "Adresse MAC de la console (psx_mac)",
+          "dsx_mac": "Adresse MAC de la manette (dsx_mac)",
+          "controller_type": "Type de manette"
         }
       },
       "init_esphome": {
@@ -140,6 +170,9 @@
       }
     },
     "error": {
+      "no_controller": "Aucune manette PlayStation compatible détectée en USB. Veuillez la rebrancher et réessayer.",
+      "extraction_error": "Une erreur s'est produite lors de la lecture du périphérique USB. Consultez les journaux (logs).",
+      "invalid_mac": "Une des adresses MAC est invalide. Format attendu : XX:XX:XX:XX:XX:XX.",
       "invalid_wake_method": "Méthode de réveil invalide.",
       "invalid_adapter": "Format d'adaptateur Bluetooth invalide. Utilisez hciX (exemple : hci0).",
       "adapter_already_configured": "L'adaptateur Bluetooth sélectionné est déjà configuré pour une autre console.",
@@ -147,6 +180,10 @@
       "detection_error": "Impossible de détecter la stratégie de l'adaptateur. Vérifiez que l'adaptateur est connecté et que Home Assistant a accès aux périphériques Bluetooth.",
       "no_esphome_found": "Aucun nœud ESPHome compatible trouvé. Vérifiez qu'un nœud avec le firmware WakePSX est en ligne et accessible depuis Home Assistant.",
       "no_adapter_found": "Aucun adaptateur Bluetooth détecté sur ce système. Veuillez connecter un dongle Bluetooth USB et réessayer."
+    },
+    "abort": {
+      "already_configured": "Cette adresse MAC est déjà utilisée par une autre console configurée.",
+      "extraction_error": "Une erreur interne s'est produite lors de la lecture de la manette. Veuillez réessayer."
     }
   }
 }
